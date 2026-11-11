@@ -1,0 +1,18 @@
+node_modules/
+.next/
+out/
+next-env.d.ts
+*.tsbuildinfo
+.env*
+!.env.example
+# โมเดล Whisper ที่ดาวน์โหลดมา
+.cache/
+# ไฟล์วิดีโอ/เสียงการประชุม ไม่ควร commit
+*.mp4
+*.mkv
+*.mov
+*.avi
+*.webm
+*.mp3
+*.m4a
+*.wav
