@@ -1,8 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { formatTimestamp, transcriptForPrompt } from "./format.ts";
+import { CLAUDE_MODELS, DEFAULT_CLAUDE_MODEL } from "./settings.ts";
 import type { Transcript } from "./types.ts";
-
-export const CLAUDE_MODEL = process.env.CLAUDE_MODEL || "claude-opus-5-5";
 
 const SYSTEM_PROMPT = `คุณคือเลขานุการการประชุมมืออาชีพ หน้าที่ของคุณคือสรุปบทถอดเสียงการประชุมเป็นรายงานการประชุมภาษาไทยที่ถูกต้องและอ่านง่าย
 
@@ -20,22 +19,47 @@ const SYSTEM_PROMPT = `คุณคือเลขานุการการป
 
 export class MissingApiKeyError extends Error {}
 
-export async function summarizeTranscript(t: Transcript): Promise<string> {
+export interface ClaudeOptions {
+  /** Key typed by the user in Settings. Falls back to ANTHROPIC_API_KEY on the server. */
+  apiKey?: string;
+  model?: string;
+}
+
+export function resolveModel(model?: string): string {
+  if (model && CLAUDE_MODELS.some((m) => m.id === model)) return model;
+  const envModel = process.env.CLAUDE_MODEL;
+  return envModel || DEFAULT_CLAUDE_MODEL;
+}
+
+export function createClient(apiKey?: string): Anthropic {
+  const key = apiKey?.trim();
+  if (key) return new Anthropic({ apiKey: key });
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
-    throw new MissingApiKeyError("ยังไม่ได้ตั้งค่า ANTHROPIC_API_KEY ในไฟล์ .env.local");
+    throw new MissingApiKeyError("ยังไม่ได้ใส่ Claude API Key — กดปุ่ม ⚙ ตั้งค่า ที่มุมขวาบนเพื่อใส่ Key ของคุณ");
   }
-  const client = new Anthropic();
+  return new Anthropic();
+}
+
+/** Cheap check that a key works: listing models costs no tokens. */
+export async function verifyApiKey(apiKey: string): Promise<void> {
+  await createClient(apiKey).models.list({ limit: 1 });
+}
+
+export async function summarizeTranscript(t: Transcript, opts: ClaudeOptions = {}): Promise<string> {
+  const client = createClient(opts.apiKey);
+  const model = resolveModel(opts.model);
   const userContent =
     `ไฟล์: ${t.source}\nความยาว: ${formatTimestamp(t.duration, { ms: false })}\n\n` +
     `<transcript>\n${transcriptForPrompt(t)}\n</transcript>`;
 
+  // Server-side refusal fallback is available for Opus 5.5 / Sonnet 5.5, not Haiku 5.5.
+  const withFallback = model !== "claude-haiku-5-5";
   const stream = client.beta.messages.stream({
-    model: CLAUDE_MODEL,
+    model,
     max_tokens: 64000,
     system: SYSTEM_PROMPT,
     output_config: { effort: "medium" },
-    betas: ["server-side-fallback-2026-07-01"],
-    fallbacks: "default",
+    ...(withFallback ? { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const } : {}),
     messages: [{ role: "user", content: userContent }],
   });
   const message = await stream.finalMessage();

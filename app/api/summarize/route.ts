@@ -1,12 +1,16 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { MissingApiKeyError, summarizeTranscript } from "@/lib/summarize.ts";
+import { summarizeTranscript } from "@/lib/summarize.ts";
 import type { Transcript } from "@/lib/types.ts";
+import { claudeErrorResponse, userClaudeOptions } from "../claude-errors.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
-/** POST /api/summarize  body: { transcript }  ->  { summary } (Markdown) */
+/**
+ * POST /api/summarize  body: { transcript }  ->  { summary } (Markdown)
+ * Optional headers x-user-anthropic-key / x-user-claude-model come from the user's Settings
+ * (localStorage). The key is used for this one request only - never stored or logged.
+ */
 export async function POST(req: Request) {
   let transcript: Transcript;
   try {
@@ -17,16 +21,9 @@ export async function POST(req: Request) {
   }
 
   try {
-    const summary = await summarizeTranscript(transcript);
+    const summary = await summarizeTranscript(transcript, userClaudeOptions(req));
     return Response.json({ summary });
   } catch (e) {
-    if (e instanceof MissingApiKeyError) return Response.json({ error: e.message }, { status: 400 });
-    if (e instanceof Anthropic.AuthenticationError)
-      return Response.json({ error: "ANTHROPIC_API_KEY ไม่ถูกต้อง" }, { status: 401 });
-    if (e instanceof Anthropic.RateLimitError)
-      return Response.json({ error: "เรียกใช้ Claude ถี่เกินไป กรุณาลองใหม่อีกครั้ง" }, { status: 429 });
-    if (e instanceof Anthropic.APIError)
-      return Response.json({ error: `Claude API error: ${e.message}` }, { status: 502 });
-    return Response.json({ error: (e as Error).message }, { status: 500 });
+    return claudeErrorResponse(e);
   }
 }
