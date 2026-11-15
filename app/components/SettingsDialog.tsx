@@ -19,6 +19,13 @@ interface Props {
   onSave: (s: Settings) => void;
 }
 
+const MODEL_PLACEHOLDER: Record<AiProvider, string> = {
+  anthropic: "เช่น claude-opus-5-5",
+  openai: "ชื่อโมเดลของ OpenAI",
+  gemini: "ชื่อโมเดลของ Gemini",
+  "openai-compatible": "เช่น llama3.1 หรือชื่อโมเดลใน Ollama",
+};
+
 type Check = { state: "idle" | "checking" | "ok" | "error"; message?: string };
 
 export default function SettingsDialog({ open, settings, onClose, onSave }: Props) {
@@ -96,7 +103,6 @@ export default function SettingsDialog({ open, settings, onClose, onSave }: Prop
   }
 
   const needsKey = draft.provider !== "openai-compatible";
-  const modelOptions = models.length ? models : model ? [model] : [];
 
   return (
     <dialog ref={ref} className="dialog" onClose={onClose} onCancel={onClose}>
@@ -155,15 +161,26 @@ export default function SettingsDialog({ open, settings, onClose, onSave }: Prop
 
         <label className="field">
           โมเดล
-          {modelOptions.length ? (
-            <select value={model} onChange={(e) => setModel(e.target.value)}>
-              {modelOptions.map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          ) : (
-            <input type="text" value={model} placeholder="กดตรวจสอบ Key เพื่อเลือกจากรายการ หรือพิมพ์ชื่อโมเดล"
-              onChange={(e) => setModel(e.target.value)} />
-          )}
+          <input type="text" list="ai-model-options" value={model} autoComplete="off" spellCheck={false}
+            placeholder={MODEL_PLACEHOLDER[draft.provider]}
+            onChange={(e) => setModel(e.target.value)} />
+          <datalist id="ai-model-options">
+            {models.map((m) => <option key={m} value={m} />)}
+          </datalist>
+          <span className="hint">
+            พิมพ์ชื่อโมเดลเองได้ตามต้องการ
+            {models.length ? ` หรือเลือกจาก ${models.length} โมเดลในบัญชีของคุณ` : " หรือกดตรวจสอบ Key เพื่อดูรายชื่อโมเดลที่ใช้ได้"}
+          </span>
         </label>
+        {models.length > 0 && (
+          <div className="chips" aria-label="โมเดลที่ใช้ได้">
+            {models.slice(0, 30).map((m) => (
+              <button type="button" key={m} className={`chip${m === model ? " active" : ""}`} onClick={() => setModel(m)}>
+                {m}
+              </button>
+            ))}
+          </div>
+        )}
 
         <label className="check">
           <input type="checkbox" checked={draft.autoSummary} onChange={(e) => update({ autoSummary: e.target.checked })} />
