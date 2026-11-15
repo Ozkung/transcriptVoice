@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Markdown from "./components/Markdown";
+import SettingsDialog from "./components/SettingsDialog";
 import { formatTimestamp } from "@/lib/format.ts";
 import {
   DEFAULT_WHISPER_MODEL,
@@ -11,6 +12,14 @@ import {
   type TranscribeEvent,
   type Transcript,
 } from "@/lib/types.ts";
+import {
+  aiConfigFrom,
+  DEFAULT_SETTINGS,
+  isAiReady,
+  loadSettings,
+  providerLabel,
+  type Settings,
+} from "@/lib/settings.ts";
 
 const LANGUAGES = [
   { id: "th", label: "ไทย" },
@@ -35,6 +44,8 @@ export default function Home() {
   const [model, setModel] = useState<string>(DEFAULT_WHISPER_MODEL);
   const [autoSummary, setAutoSummary] = useState(false);
   const [drag, setDrag] = useState(false);
+  const [settings, setSettings] = useState<Settings>(DEFAULT_SETTINGS);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const [phase, setPhase] = useState<Phase>("idle");
   const [status, setStatus] = useState("");
@@ -55,6 +66,19 @@ export default function Home() {
   const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => () => { if (mediaUrl) URL.revokeObjectURL(mediaUrl); }, [mediaUrl]);
+
+  // Settings live in localStorage, so read them after mount (not during server render).
+  useEffect(() => applySettings(loadSettings()), []);
+
+  function applySettings(s: Settings) {
+    setSettings(s);
+    setLanguage(s.language);
+    setModel(s.whisperModel);
+    setAutoSummary(s.autoSummary);
+  }
+
+  const ai = aiConfigFrom(settings);
+  const aiReady = isAiReady(ai);
 
   function pickFile(f: File | undefined) {
     if (!f) return;
@@ -134,6 +158,11 @@ export default function Home() {
 
   async function summarize(t = currentTranscript()) {
     if (!t) return;
+    if (!isAiReady(ai)) {
+      setError("ยังไม่ได้ตั้งค่า AI — ใส่ API Key และเลือกโมเดลของคุณในหน้าตั้งค่าก่อน");
+      setSettingsOpen(true);
+      return;
+    }
     setSummarizing(true);
     setTab("summary");
     setError(null);
@@ -141,7 +170,7 @@ export default function Home() {
       const res = await fetch("/api/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: t }),
+        body: JSON.stringify({ transcript: t, ai }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "สรุปไม่สำเร็จ");
@@ -194,9 +223,24 @@ export default function Home() {
   return (
     <main className="container">
       <header className="top">
-        <h1>TranscriptVoice</h1>
-        <p>อัปโหลดวิดีโอการประชุม → ถอดเสียงเป็นข้อความ → ดาวน์โหลดเป็นเอกสาร Word / Markdown / ซับไตเติล</p>
+        <div>
+          <h1>TranscriptVoice</h1>
+          <p>อัปโหลดวิดีโอการประชุม → ถอดเสียงเป็นข้อความ → ดาวน์โหลดเป็นเอกสาร Word / Markdown / ซับไตเติล</p>
+        </div>
+        <button className="btn settings-btn" onClick={() => setSettingsOpen(true)} title="ตั้งค่า AI และค่าเริ่มต้น">
+          ⚙ ตั้งค่า
+          <span className={`badge${aiReady ? " ready" : ""}`}>
+            {aiReady ? `${providerLabel(ai.provider).split(" ")[0]} · ${ai.model}` : "ยังไม่ได้ตั้งค่า AI"}
+          </span>
+        </button>
       </header>
+
+      <SettingsDialog
+        open={settingsOpen}
+        settings={settings}
+        onClose={() => setSettingsOpen(false)}
+        onSave={applySettings}
+      />
 
       <section className="card">
         <div
@@ -234,7 +278,7 @@ export default function Home() {
           </label>
           <label className="check">
             <input type="checkbox" checked={autoSummary} onChange={(e) => setAutoSummary(e.target.checked)} disabled={busy} />
-            สรุปรายงานการประชุมด้วย AI อัตโนมัติ
+            สรุปรายงานการประชุมด้วย AI ของคุณอัตโนมัติ
           </label>
         </div>
 
@@ -324,7 +368,7 @@ export default function Home() {
                 </div>
               </>
             ) : summarizing ? (
-              <p className="status">กำลังสรุปรายงานการประชุมด้วย Claude ... (อาจใช้เวลา 1–2 นาที)</p>
+              <p className="status">กำลังสรุปรายงานการประชุมด้วย {providerLabel(ai.provider)} ... (อาจใช้เวลา 1–2 นาที)</p>
             ) : summary ? (
               <>
                 <Markdown source={summary} />
@@ -335,12 +379,17 @@ export default function Home() {
             ) : (
               <div>
                 <p className="muted">
-                  ให้ AI สรุปบทถอดเสียงเป็นรายงานการประชุม: ภาพรวม ประเด็นที่หารือ มติ งานที่ต้องทำ และผู้รับผิดชอบ
-                  (ต้องตั้งค่า ANTHROPIC_API_KEY บน server)
+                  ให้ AI ของคุณสรุปบทถอดเสียงเป็นรายงานการประชุม: ภาพรวม ประเด็นที่หารือ มติ งานที่ต้องทำ และผู้รับผิดชอบ
+                  {aiReady
+                    ? ` (ใช้ ${providerLabel(ai.provider)} · ${ai.model})`
+                    : " — ต้องใส่ API Key ของคุณในหน้าตั้งค่าก่อน"}
                 </p>
-                <button className="btn primary" onClick={() => summarize()} disabled={!transcript}>
-                  สรุปรายงานการประชุม
-                </button>
+                <div className="row">
+                  <button className="btn primary" onClick={() => summarize()} disabled={!transcript}>
+                    สรุปรายงานการประชุม
+                  </button>
+                  {!aiReady && <button className="btn" onClick={() => setSettingsOpen(true)}>⚙ ตั้งค่า AI</button>}
+                </div>
               </div>
             )}
           </div>

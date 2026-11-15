@@ -1,29 +1,29 @@
+import { aiErrorResponse, parseAiConfig } from "@/lib/ai.ts";
 import { summarizeTranscript } from "@/lib/summarize.ts";
 import type { Transcript } from "@/lib/types.ts";
-import { claudeErrorResponse, userClaudeOptions } from "../claude-errors.ts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const maxDuration = 600;
 
 /**
- * POST /api/summarize  body: { transcript }  ->  { summary } (Markdown)
- * Optional headers x-user-anthropic-key / x-user-claude-model come from the user's Settings
- * (localStorage). The key is used for this one request only - never stored or logged.
+ * POST /api/summarize  body: { transcript, ai: { provider, apiKey, model, baseUrl? } }  ->  { summary }
+ * `ai` comes from the user's own Settings (localStorage). The key is used for this call only -
+ * never stored or logged.
  */
 export async function POST(req: Request) {
-  let transcript: Transcript;
+  let body: { transcript?: Transcript; ai?: unknown };
   try {
-    ({ transcript } = await req.json());
-    if (!transcript?.segments?.length) throw new Error();
+    body = await req.json();
   } catch {
-    return Response.json({ error: "ข้อมูลบทถอดเสียงไม่ถูกต้อง" }, { status: 400 });
+    return Response.json({ error: "คำขอไม่ถูกต้อง" }, { status: 400 });
   }
+  if (!body.transcript?.segments?.length) return Response.json({ error: "ข้อมูลบทถอดเสียงไม่ถูกต้อง" }, { status: 400 });
 
   try {
-    const summary = await summarizeTranscript(transcript, userClaudeOptions(req));
+    const summary = await summarizeTranscript(body.transcript, parseAiConfig(body.ai));
     return Response.json({ summary });
   } catch (e) {
-    return claudeErrorResponse(e);
+    return aiErrorResponse(e);
   }
 }

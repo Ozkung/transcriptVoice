@@ -121,3 +121,33 @@ video, audio { width: 100%; border-radius: 8px; background: #000; }
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
+
+header.top { display: flex; gap: 16px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.settings-btn { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
+.badge { font-size: 12px; font-weight: 400; color: var(--danger); max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+.badge.ready { color: var(--muted); }
+
+.dialog {
+  width: min(560px, calc(100vw - 32px)); max-height: calc(100vh - 32px); overflow-y: auto;
+  border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+  background: var(--surface); color: var(--text);
+}
+.dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.dialog form { display: flex; flex-direction: column; gap: 12px; }
+.dialog h2 { margin: 0; font-size: 20px; }
+.dialog h3 { margin: 8px 0 0; font-size: 15px; }
+.dialog p { margin: 0; }
+.dialog-head { display: flex; align-items: center; justify-content: space-between; }
+.dialog-foot { margin-top: 8px; padding-top: 12px; border-top: 1px solid var(--border); }
+.icon-btn { border: none; background: none; cursor: pointer; font-size: 18px; color: var(--muted); padding: 4px 8px; }
+.row.nowrap { flex-wrap: nowrap; }
+.row.nowrap input { flex: 1; min-width: 0; }
+label.field input[type="password"] {
+  padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); width: 100%;
+}
+.hint { font-size: 12px; color: var(--muted); }
+.hint a { color: var(--accent); }
+.ok { color: #1a7f37; }
+.btn.danger { color: var(--danger); }
+.btn.danger:hover:not(:disabled) { border-color: var(--danger); color: var(--danger); }
+.dialog .error { margin: 0; }
